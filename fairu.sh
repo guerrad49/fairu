@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Load helper functions
-source "/Users/david_guerra/Programming/bash/functions.sh"
+source "/Users/david_guerra/Programming/bash/fairu/functions.sh"
 
 # Text formatting.
 bold=$(tput bold)
@@ -74,8 +74,9 @@ shift $((OPTIND-1))
 
 # Sort files.
 if [[ -n ${METHOD+x} ]]; then
-   files=$(get_files_with_ext $DIR "${EXTS[@]}")
-   results=$(printf "%s\n" "${files[@]}" | get_sorted_files $METHOD)
+   files=($(get_files_with_ext $DIR "${EXTS[@]}"))
+   # Terminate early if no matches.
+   results=$(get_sorted_files $METHOD "${files[@]}")
 
    if [[ -n ${OUTFILE+x} ]]; then
       echo "$results" > $OUTFILE
@@ -83,6 +84,8 @@ if [[ -n ${METHOD+x} ]]; then
       echo "$results"
    fi
 fi
+
+# This is a separate flow.
 
 # Order files in a copy folder.
 if [[ -n ${INFILE+x} ]]; then

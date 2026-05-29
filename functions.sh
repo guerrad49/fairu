@@ -32,26 +32,25 @@ get_files_with_ext() {
     local dir="$1"
     shift   # Remove directory argument, now only extensions left.
     local exts=("$@")
-
-    shopt -s nullglob
     local files=()
 
-    echo "here"
+    # Enable nullglob so unmatched patterns expand to nothing.
+    shopt -s nullglob
+
     for ext in "${exts[@]}"; do
-        # Use globbing for extensions.
         for f in "$dir"/*."$ext"; do
-            # Avoid returning the literal pattern if no match.
-            [[ -e "$f" ]] && files+=("$f")
+            files+=("$f")
         done
     done
 
-    # Terminate early if no matches.
-    # if [[ ${#files[@]} -eq 0 ]]; then
-    #     echo "No files with given extensions found."
-    #     exit 1
-    # fi
-
     shopt -u nullglob
+
+    # Terminate early if no matches.
+    if [[ ${#files[@]} -eq 0 ]]; then
+        echo ""
+        return 1
+    fi
+
     printf "%s\n" "${files[@]}"
 }
 
@@ -85,51 +84,49 @@ get_files_with_ext() {
 #
 get_sorted_files() {
     local method="$1"
+    shift
+    local files=("$@")
 
     case "$method" in
-        name)
+        "name")
             # Sort by full path.
-            awk -F/ '{print $0}' | sort
+            printf "%s\n" "${files[@]}" | sort
             ;;
-        creation)
-            while IFS= read -r f; do
-                rawDate=$(GetFileInfo -d "$f")
-                # Convert MM/DD/YYYY HH:MM:SS to YYYY-MM-DD HH:MM:SS
-                sortableDate=$(date -j -f "%m/%d/%Y %H:%M:%S" "$rawDate" +"%Y-%m-%d %H:%M:%S")
-                echo "$f $sortableDate"
-            done | sort -k 2,3 | cut -d " " -f 1-3
+        "creation")
+            for f in "${files[@]}"; do
+                timestamp=$(stat -f "%B" "$f")
+                # Print timestamp and file side-by-side.
+                printf "%s %s\n" "$timestamp" "$f"
+            done | sort -n | cut -d' ' -f2-
             ;;
         *)
-            echo "Unknown sort method: $method" >$2
+            echo "Unknown sort method: $method" >&2
             return 1
             ;;
     esac
 }
 
 copy_ordered_files() {
-    local paths=$(cat "$1")
+    local order_file="$1"
     local prefix="$2"
-    local start="$3"
+    local start_index="$3"
+    local idx=$start_index
 
-    # Determine format from number of lines in file.    
-    lineCount=$(grep -c ^ <<< "$paths")
-    numFormat="%03d"
-    if [[ $lineCount -gt 999 ]]; then
-        numFormat="%04d"
-    fi
+    # Read the ordered file line by line.
+    while IFS= read -r src_file; do
+        [[ -z "$src_file" ]] || [[ ! -e "$src_file" ]] && continue
 
-    # Make and get the copy directory.
-    firstPath=$(echo "$paths" | head -n 1)
-    parentDir=$(dirname "$firstPath")
-    copyDir="${parentDir}_COPY"
-    mkdir -p "$copyDir"
+        local parent_dir=$(dirname "$src_file")
+        local raw_ext="${src_file##*.}"
+        local ext=$(echo "$raw_ext" | tr '[:upper:]' '[:lower:]')
+        
+        # The new formatted name.
+        local dest_name
+        printf -v dest_name "%s_%03d.%s" "$prefix" "$idx" "$ext"
 
-    for path in $paths; do
-        file=$(basename "$path")
-        # lowercase="${file,,}"
-        ext=$(echo ${file#*.} | awk '{print tolower($0)}')
-        newName=$(echo "${prefix}_$(printf ${numFormat} $start).$ext")
-        cp "$path" "${copyDir}/${newName}"
-        let start=start+1
-    done
+        mv "$src_file" "$parent_dir/$dest_name"
+        echo "Renamed: $src_file -> $parent_dir/$dest_name"
+
+        ((idx++))
+    done < "$order_file"
 }
