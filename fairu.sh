@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Load helper functions
-source "/Users/david_guerra/Programming/bash/fairu/functions.sh"
+source "/Users/dguerra/Programming/bash/fairu/functions.sh"
 
 # Text formatting.
 bold=$(tput bold)
